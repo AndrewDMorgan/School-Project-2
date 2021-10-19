@@ -339,6 +339,10 @@ def Specular(smoothness: float, normal: Vec3, rd: Vec3, sun_dir: Vec3) -> float:
         return 0
 
 
+def FV3(f: float) -> Vec3:
+    return Vec3(f, f, f)
+
+
 res = Vec2(1200, 750)
 screen = pygame.display.set_mode(res)
 
@@ -348,14 +352,12 @@ radians = Vec2(math.atan2(sun_dir.x, sun_dir.z), math.atan2(sun_dir.y, sun_dir.z
 
 frame = 0
 
-player_pos = Vec3(10, -10, 10)
+player_pos = Vec3(0, -10, 0)
 cam_pos = player_pos - Vec3(0, 2, 0)
 cam_rot = Vec2(0, 0)
 velocity = Vec3(0, 0, 0)
 
 player_chunk_pos = Vec2(-1200, -1200)
-
-grounded = False
 
 rotMatX = RotMat(cam_rot.x)
 rotMatY = RotMat(cam_rot.y)
@@ -413,6 +415,7 @@ for x in range(1024):
 #data = open('utah teapot.obj').read().split('\n')
 #data = open('ocean.obj').read().split('\n')
 #data = open('half earth.obj').read().split('\n')
+data = open('terrain.obj').read().split('\n')
 
 normals = []
 verts = []
@@ -528,6 +531,7 @@ while running:
     if not running:
         break
 
+    # finding the aplied force
     movement_speed = 120 * dt
     pi = 3.14159
     rot_speed = pi * dt
@@ -558,33 +562,46 @@ while running:
         change_cam = Vec2(0, -rot_speed)
         cam_rot += change_cam
 
-    """
+    # finding the net force
+
+    #"""
+    Fnet = Vec3(0, 0, 0)
     F_g = Vec3(0, 9.81, 0)  # gravity
-    F_n = Vec3(0, 0, 0)
+    Fnet = Fnet + F_g
+    a = Fnet
     
-    grounded = False
+    vi = velocity.copy()
+    
     ray_start = player_pos
-    ray_end = player_pos + (velocity + F_g + F_app)
-    for polygon in polygons:
-        intersection = RayTriangle(polygon.point1, polygon.point2, polygon.point3, ray_start, ray_end)
-        if intersection is not False:
-            #player_pos = intersection - normalize(velocity) * Vec3(0.2, 0.2, 0.2)
-            F_n = -polygon.normal * V3(length(velocity + F_g + F_app))
-            grounded = True
-            break
+    ray_end = player_pos + FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * vi  # the end of the ray
+    movement_direction = normalize(ray_end)
+    for mesh in polygons:
+        for polygon in mesh:
+            intersection = RayTriangle(polygon.point1, polygon.point2, polygon.point3, ray_start, ray_end)
+            if intersection is not False:
+                dst_to_surface = length(intersection) - 0.000001  # the intersection function dosent work on the surface of an object so im moving it back a bit
+                collition_point = movement_direction * Vec3(dst_to_surface, dst_to_surface, dst_to_surface)
+
+                surface_normal = polygon.normal
+
+                v_dot_n = dot(surface_normal, velocity)
+                velocity = velocity - surface_normal * FV3(v_dot_n)
+
+                a_dot_n = dot(surface_normal, a)
+                a = a - surface_normal * FV3(a_dot_n)
+
+                break
+        else:
+            continue
+        break
     
-    if grounded:
-        pass
+    #"""
 
-    F_net = F_g + F_app + F_n
-    #velocity += F_net * Vec3(dt, dt, dt)
-    #player_pos += velocity * Vec3(dt, dt, dt)
-    velocity = Vec3(pyMath.clamp(velocity.x, -8, 8), pyMath.clamp(velocity.y, -80, 80), pyMath.clamp(velocity.z, -8, 8))
-    velocity *= Vec3(0.9, 1, 0.9)
-    """
+    # changing the position and velocity
 
-    player_pos += F_app * Vec3(dt, dt, dt)
-    cam_pos = player_pos - Vec3(0, 0, 0)
+    player_pos += FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * vi
+    #player_pos += F_app * Vec3(dt, dt, dt)
+    cam_pos = player_pos - Vec3(0, 2, 0)
 
     rotMatX = RotMat(cam_rot.x)
     rotMatY = RotMat(cam_rot.y)
@@ -601,9 +618,8 @@ while running:
     forwards_vector = Rotate(Vec3(0, 0, -1), rotMatX, rotMatY)
     radians = Vec2(math.atan2(sun_dir.x - forwards_vector.x, sun_dir.z - forwards_vector.z), math.atan2(sun_dir.y - forwards_vector.y, sun_dir.z - forwards_vector.z))
 
-
-
     """
+    # junk from something else
     polygons = []
     player_chunk_pos = floor(Vec2(cam_pos.x, cam_pos.z) / Vec2(16, 16))
     for X in range(-1, 2):
