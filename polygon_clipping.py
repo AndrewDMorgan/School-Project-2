@@ -564,6 +564,15 @@ while running:
 
     # finding the net force
 
+    def IsOnSurface(triangle: Polygon, point: Vec3) -> bool:
+        normal = triangle.normal  # the normal
+        mid_point = (triangle.point1 + triangle.point2 + triangle.point3) * FV3(0.33333333)  # the mid point of the triangle
+        direction_to_mid_point = normalize(mid_point - point)  # the direction to the center of the triangle (is 90˚ to the surface normal if it is parallel to the polygon)
+        perpandicular = dot(normal, direction_to_mid_point) == 0  # if the direction is 90˚ to the normal then it is parallel to the triangle
+        if perpandicular:
+            # check if the point is in the bounds of the triangles edges
+            pass
+    
     #"""
     Fnet = Vec3(0, 0, 0)
     F_g = Vec3(0, 9.81, 0)  # gravity
