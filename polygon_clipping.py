@@ -570,17 +570,16 @@ while running:
     Fnet = Fnet + F_g
     a = Fnet
     
-    vi = velocity.copy()
-    
     ray_start = player_pos
-    ray_end = player_pos + FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * vi  # the end of the ray
+    ray_end = player_pos + FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * velocity  # the end of the ray
     movement_direction = normalize(ray_end)
     for mesh in polygons:
         for polygon in mesh:
             intersection = RayTriangle(polygon.point1, polygon.point2, polygon.point3, ray_start, ray_end)
+            # check if the point is right on the surface (the intersection function only works when the point isnt on the surface)
             if intersection is not False:
-                dst_to_surface = length(intersection) - 0.000001  # the intersection function dosent work on the surface of an object so im moving it back a bit
-                collition_point = movement_direction * Vec3(dst_to_surface, dst_to_surface, dst_to_surface)
+                #dst_to_surface = length(intersection) - 0.000001  # the intersection function dosent work on the surface of an object so im moving it back a bit
+                #collition_point = movement_direction * Vec3(dst_to_surface, dst_to_surface, dst_to_surface)
 
                 surface_normal = polygon.normal
 
@@ -589,7 +588,7 @@ while running:
 
                 a_dot_n = dot(surface_normal, a)
                 a = a - surface_normal * FV3(a_dot_n)
-
+                
                 break
         else:
             continue
@@ -599,7 +598,8 @@ while running:
 
     # changing the position and velocity
 
-    player_pos += FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * vi
+    player_pos += FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * velocity
+    velocity += a * Vec3(dt, dt, dt)
     #player_pos += F_app * Vec3(dt, dt, dt)
     cam_pos = player_pos - Vec3(0, 2, 0)
 
