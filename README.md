@@ -14,6 +14,6 @@ I will soon be uploading a more complete and cleaned up version of the renderer 
 # Goals
 
 - At least 15 fps
-- Dealine; 2 weeks or so
+- Dealine 2 weeks or so
 - A fair bit of polish
 - Nice and tidy readable code packed into many classes, functions, and different files
