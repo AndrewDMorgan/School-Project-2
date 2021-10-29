@@ -7,13 +7,14 @@ I will soon be uploading a more complete and cleaned up version of the renderer 
 # Planned Features
 
 - A 3D renderer (needs optomization)
-- A basic physics engine (work in progress, currently working on the collision detection)
-- Basic maps and game mechanics (haven't started on)
-- Data saving and loading for the levels (haven't started on)
+- A basic physics engine (still a few bugs)
+- Basic maps and game mechanics (still needs more)
+- Data saving and loading for the levels (haven't started on but will for the next part of my project)
 
 # Goals
 
 - At least 15 fps
-- Dealine 2 weeks or so
-- A fair bit of polish
-- Nice and tidy readable code packed into many classes, functions, and different files
+- Dealine idk
+- A fair bit more of polish
+- A better map
+- More meckanics
