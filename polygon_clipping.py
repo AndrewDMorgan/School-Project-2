@@ -172,23 +172,70 @@ def Triangle_ClipAgainstPlane(plane_p: Vec3, plane_n: Vec3, in_tri: Vec3) -> Lis
 # clips a 2d polygon to the bounds of the screen to not waset time rendering unseen pixels (not my own but i know why/how it works, there was just an already made version and im lazy)
 def clip(subjectPolygon, clipPolygon):
     """
-    def InBox(point) -> bool:
-        return point.x >= 0 and point.y >= 0 and point.x <= res.x and point.y <= res.y
+    def ClipLineVirticle(p1: Vec2, p2: Vec2, x: float) -> Union[Vec2, bool]:
+        if (p2.x < x and p1.x > x):
+            start = p2
+            dif = p1 - p2
+        elif (p2.x < x and p1.x > x):
+            dif = p2 - p1
+            start = p1
+        else:
+            return False  # no intersection
+        slope = pyMath.divide0(dif.y, dif.x)
+        ny = x - start.x
+        return slope * ny + start.y
+
+    def ClipLineHorizontal(p1: Vec2, p2: Vec2, y: float) -> Union[Vec2, bool]:
+        if (p2.y < y and p1.y > y):
+            start = p2
+            dif = p1 - p2
+        elif (p2.y < y and p1.y > y):
+            dif = p2 - p1
+            start = p1
+        else:
+            return False  # no intersection
+        slope = pyMath.divide0(dif.y, dif.x)
+        nx = y - start.y
+        return pyMath.divide0(nx, slope) - start.y
     
-    point1 = clipPolygon[0]
-    point2 = clipPolygon[1]
-    point3 = clipPolygon[2]
+    def VectorizeV2(p: List[float]) -> Vec2:
+        return Vec2(p[0], p[1])
 
-    line1 = (point1.y - point2.y) / (point1.x - point2.x)
-    line2 = (point2.y - point3.y) / (point2.x - point3.x)
-    line3 = (point3.y - point1.y) / (point3.x - point1.x)
+    def LowerPoint(p1: Vec2, p2: Vec2) -> List[Vec2]:  # sense the points dont come in sorted correctly
+        if p1.y < p2.y:
+            return [p2, p2]
+        return [p1, p2]
 
-    b1 = point1.y
-    b2 = point2.y
-    b3 = point2.y
+    edge1 = [VectorizeV2(clipPolygon[0]), VectorizeV2(clipPolygon[1])]
+    edge2 = [VectorizeV2(clipPolygon[1]), VectorizeV2(clipPolygon[2])]
+    edge3 = [VectorizeV2(clipPolygon[2]), VectorizeV2(clipPolygon[0])]
+    edges = [edge1, edge2, edge3]
+
+    new_edges = []
+    for edge in edges:
+        new_edge_height = ClipLineHorizontal(edge[0], edge[1], 0)
+        if new_edge_height is False:
+            new_edge = edge
+        else:
+            sorted_edge = LowerPoint(edge[0], edge[1])
+            new_edge = [sorted_edge[0], Vec2(new_edge_height, 0)]
+        new_edge_height = ClipLineHorizontal(new_edge[0], new_edge[1], 750)
+        if new_edge_height is not False:
+            sorted_edge = LowerPoint(edge[0], edge[1])
+            new_edge_height = [sorted_edge[1], Vec2(new_edge_height, 750)]
+        # clip horizontaly
+        #new_edge = ClipLineVirticle(new_edge[0], new_edge[1], 0)
+        #new_edge = ClipLineVirticle(new_edge[0], new_edge[1], 1200)
+
+        new_edges.append(new_edge)
+    
+    return [new_edges[0][0], new_edges[0][1], new_edges[1][0], new_edges[1][1], new_edges[2][0], new_edges[2][1]]
+    #"""
+    # clipPolygon is the polygon/triangle
+    """
+    
     #"""
 
-    #"""
     def inside(p):
         return(cp2[0]-cp1[0])*(p[1]-cp1[1]) > (cp2[1]-cp1[1])*(p[0]-cp1[0])
     
@@ -219,8 +266,7 @@ def clip(subjectPolygon, clipPolygon):
                 outputList.append(computeIntersection())
             s = e
         cp1 = cp2
-    return(outputList)
-    #"""
+    return outputList
 
 
 # finds the intersection of a ray/vector with a 3d triangle (not my own, i dont know the advanced math required yet)
@@ -277,7 +323,7 @@ class Polygon:
 
         # the normal and pre calculated light (dosent give much of a preformace boost, maybe 0.5 fps)
         self.normal = normal
-        self.color = color
+        self.color = mix(color, undertone, undertone_strength)
 
         # the light level (insnt being used because it only saves 1 or 2 fps by precalculating it)
         light = dot(sun_dir, self.normal) * 0.5 + 0.5
@@ -307,6 +353,11 @@ class Polygon:
         point2 = data2[0]
         point3 = data3[0]
 
+        normal_rotted = Rotate(self.normal, rotMatY, rotMatX)
+
+        #mid_point_projected1 = Project((self.rotted1 + self.rotted2 + self.rotted3) * FV3(0.33333333))
+        #mid_point_projected2 = Project((self.rotted1 + self.rotted2 + self.rotted3) * FV3(0.33333333) - normal_rotted * FV3(1.5))
+
         # basic diffuse shading (flat shading in this case to)
         light = dot(sun_dir, self.normal) * 0.5 + 0.5
         # the mid point of the triangle
@@ -318,7 +369,7 @@ class Polygon:
         # the clipped polygon
         clipped = [[point1[0], point1[1]], [point2[0], point2[1]], [point3[0], point3[1]]]
         # returning the information
-        return [clipped, (z1 + z2 + z3) * 0.33333333333, clamp(self.color * Vec3(light, light, light) + Vec3(specular, specular, specular), 0, 255)]  # clamp(self.color * Vec3(light, light, light), 0, 255)
+        return [clipped, (z1 + z2 + z3) * 0.33333333333, clamp(self.color * Vec3(light, light, light) + Vec3(specular, specular, specular), 0, 255)]#, self.normal, mid_point_projected1, mid_point_projected2]  # clamp(self.color * Vec3(light, light, light), 0, 255)
 
 
 # stores a point and rotates it
@@ -447,6 +498,13 @@ radians = Vec2(math.atan2(sun_dir.x, sun_dir.z), math.atan2(sun_dir.y, sun_dir.z
 # the frame
 frame = 0
 
+# the tone of all the colors and the color of the sky
+undertones = [Vec3(138,10,10), Vec3(250,235,215), Vec3(245,245,220), Vec3(255,240,245), Vec3(240,255,240), Vec3(0,47,167), Vec3(255,255,0), Vec3(128,0,0), Vec3(160,82,45)]
+undertones = [Vec3(250,235,215), Vec3(128,0,0)]
+undertone = undertones[1]
+undertone_strength = 0.1
+sky_color = Vec3(135,206,250)
+
 # different parts of the player (not being used currently, im going to hook up physics soon)
 player_pos = Vec3(0, -10, 0)
 cam_pos = player_pos - Vec3(0, 2, 0)
@@ -484,7 +542,7 @@ polygons = []
 #"""
 verts = []
 
-#"""
+"""
 tri_num = 0
 
 perlin_color = array([21, 21], 'perlin', [[0.9, 1.2, 4, 'add']])
@@ -554,11 +612,11 @@ tri_num += 4
 #"""
 
 # reading an object file and converting its data to my data
-"""
+#"""
 polygons = []
-data = open('terrain.obj').read().split('\n')
+data = open('test_map.obj').read().split('\n')
 
-normals = []
+#normals = []
 verts = []
 
 tri_number = 0
@@ -570,9 +628,9 @@ for line in data:
             if line[1] == ' ':
                 points = line.split(' ')
                 verts.append(Vert(Vec3(float(points[1]), float(points[2]), float(points[3])) * Vec3(1, -1, 1)))
-            elif line[1] == 'n':
-                points = line.split(' ')
-                normals.append(Vec3(float(points[1]), float(points[2]), float(points[3])))
+            #elif line[1] == 'n':
+            #    points = line.split(' ')
+            #    normals.append(Vec3(float(points[1]), float(points[2]), float(points[3])))
 for line in data:
     if len(line) > 2:
         if line[0] == 'f':
@@ -580,11 +638,24 @@ for line in data:
             point1 = int(points[1].split('/')[0]) - 1
             point2 = int(points[2].split('/')[0]) - 1
             point3 = int(points[3].split('/')[0]) - 1
-            if tri_number < len(normals):
-                polygons.append(Polygon(point1, point2, point3, normals[tri_number], Vec3(200, 200, 200)))
-                tri_number += 1
-            else:
-                break
+
+            vert1 = verts[point1].point
+            vert2 = verts[point2].point
+            vert3 = verts[point3].point
+            
+            line1 = Vec3(None, None, None)
+            line2 = Vec3(None, None, None)
+            normal = Vec3(None, None, None)
+
+            line1 = vert2 - vert1
+            line2 = vert3 - vert1
+
+            normal.x = line1.y * line2.z - line1.z * line2.y
+            normal.y = line1.z * line2.x - line1.x * line2.z
+            normal.z = line1.x * line2.y - line1.y * line2.x
+
+            polygons.append(Polygon(point1, point2, point3, normalize(Vec3(normal.x, normal.y, normal.z)), Vec3(205,133,63)))
+            #tri_number += 1
 #"""
 
 # i can render multiple meshes by adding a , then another list of Polygons
@@ -651,6 +722,9 @@ while running:
                 held["up"] = True
             elif event.key == pygame.K_DOWN:
                 held["down"] = True
+            elif event.key in [ord('1'), ord('2')]:
+                number = [0, 1, 2, 3, 4, 5, 6, 7, 8][[ord('1'), ord('2')].index(event.key)]
+                undertone = undertones[number]
         elif event.type == pygame.KEYUP:  # checking for keys being released
             if event.key == ord('w'):
                 held["w"] = False
@@ -696,7 +770,7 @@ while running:
     #if held["shift"]:
     #    F_app += Vec3(0, movement_speed, 0)
     if held[" "] and grounded >= 0 and last_jumped <= 0:
-        F_app += Vec3(0, -500, 0)
+        F_app += Vec3(0, -225, 0)
         last_jumped = 1
         grounded = -20
     if held["left"]:
@@ -758,30 +832,32 @@ while running:
                 last_normal = surface_normal
 
                 v_dot_n = dot(surface_normal, velocity)
-                velocity = velocity - surface_normal * FV3(v_dot_n)
+                velocity_n = velocity - surface_normal * FV3(v_dot_n)
 
                 a_dot_n = dot(surface_normal, a)
                 na = a - surface_normal * FV3(a_dot_n)
                 
-                mewK = 0.2
-                mewS = 0.4
+                mewK = 0.4
+                mewS = 0.55
                 normal_force = a - na
-                dir = normalize(-velocity)
+                dir = normalize(-Vec3(velocity.x - F_app.x * dt, 0, velocity.z - F_app.z * dt))
                 f_max = mewS * length(normal_force)
-                lv = length(velocity)
+                lv = length(Vec2(velocity.x - F_app.x * dt, velocity.z - F_app.z * dt))
 
-                F_sliding = lv / dt + length(Vec2(na.x - F_app.x, na.z - F_app.z))
+                F_sliding = lv / dt# + length(Vec2(na.x - F_app.x, na.z - F_app.z))
                 if F_sliding < f_max:
                     F_f = FV3(F_sliding) * dir
                 else:
                     F_f = FV3(F_sliding - (mewK * length(normal_force))) * dir
+                
+                velocity = velocity_n
 
-                a = na + F_f
+                a = a + F_f
 
                 a_dot_n = dot(surface_normal, a)
                 a = a - surface_normal * FV3(a_dot_n)
 
-                if dot(Vec3(0, 1, 0), surface_normal) >= 0.5:
+                if dot(Vec3(0, 1, 0), surface_normal) >= 0.3:
                     grounded = 0.4
                 
                 #if Tags.bouncy in polygon.tags:
@@ -799,6 +875,10 @@ while running:
     #player_pos += F_app * Vec3(dt, dt, dt)
     cam_pos = player_pos - Vec3(0, 2, 0)
 
+    if player_pos.y > 100:
+        player_pos = Vec3(0, -10, 0)
+        player_velocity = Vec3(0, 0, 0)
+
     # creating the rotation matricies
     rotMatX = RotMat(cam_rot.x)
     rotMatY = RotMat(cam_rot.y)
@@ -815,9 +895,14 @@ while running:
 
     forwards_vector = Rotate(Vec3(0, 0, -1), rotMatX, rotMatY)
     radians = Vec2(math.atan2(sun_dir.x - forwards_vector.x, sun_dir.z - forwards_vector.z), math.atan2(sun_dir.y - forwards_vector.y, sun_dir.z - forwards_vector.z))
-
-    # filling the screen with a color
-    screen.fill((225, 225, 255))
+    
+    # filling the screen with a color (creating a sky box)
+    v = fov / 360 * 3.14159 / 750
+    for y in range(0, 750, 1):
+        height = math.sin(cam_rot.y + (750 - y) * v - 1) * 0.3 + 0.7
+        n_color = mix(sky_color * Vec3(height, height, height), undertone, undertone_strength)
+        pygame.draw.rect(screen, n_color, [0, y, 1200, 1])
+    #screen.fill(mix(sky_color, undertone, undertone_strength))
 
     # setting up some variables
     renderings = []
@@ -853,6 +938,10 @@ while running:
             continue
         if len(polygon_clipped) >= 3:
             pygame.draw.polygon(screen, polygon[2], polygon_clipped)
+            #normal = polygon[3]
+            #mid_point1 = polygon[4]
+            #mid_point2 = polygon[5]
+            #pygame.draw.line(screen, (0, 0, 0), [mid_point1[0][0], mid_point1[0][1]], [mid_point2[0][0], mid_point2[0][1]])
     
     # rendering the fps
     UI.text(f'FPS: {round(1 / max(dt, 0.00000001))}', (0, 0, 40), (10, 30), 35)
