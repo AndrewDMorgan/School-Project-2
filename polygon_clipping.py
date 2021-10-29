@@ -299,6 +299,18 @@ def RayTriangle(P1: Vec3, P2: Vec3, P3: Vec3, R1: Vec3, R2: Vec3) -> Union[bool,
     return IntersectPos
 
 
+# checks if a point is on the surface of a triangle (not being used but when done this may fix some issues)
+def IsOnSurface(triangle: object, point: Vec3) -> bool:
+    normal = triangle.normal  # the normal
+    mid_point = (verts[triangle.point1].point + verts[triangle.point2].point + verts[triangle.point3].point) * FV3(0.33333333)  # the mid point of the triangle
+    direction_to_mid_point = normalize(mid_point - point)  # the direction to the center of the triangle (is 90˚ to the surface normal if it is parallel to the polygon)
+    perpandicular = abs(dot(normal, direction_to_mid_point)) < 0.00002  # if the direction is 90˚ to the normal then it is parallel to the triangle
+    if perpandicular:
+        # check if the point is in the bounds of the triangles edges
+        return True
+    return False
+
+
 # ------------ polygons and verticies ------------
 
 
@@ -323,12 +335,12 @@ class Polygon:
 
         # the normal and pre calculated light (dosent give much of a preformace boost, maybe 0.5 fps)
         self.normal = normal
-        self.color = mix(color, undertone, undertone_strength)
+        self.color = color
 
         # the light level (insnt being used because it only saves 1 or 2 fps by precalculating it)
         light = dot(sun_dir, self.normal) * 0.5 + 0.5
         self.adjusted_color = clamp(self.color * Vec3(light, light, light), 0, 255)
-
+        
         # the tags
         self.tags = tags
     def GetVerts(self, verts_rotted: List[Vec3]) -> None:  # gets the projected verts based on the vert indexes
@@ -369,7 +381,7 @@ class Polygon:
         # the clipped polygon
         clipped = [[point1[0], point1[1]], [point2[0], point2[1]], [point3[0], point3[1]]]
         # returning the information
-        return [clipped, (z1 + z2 + z3) * 0.33333333333, clamp(self.color * Vec3(light, light, light) + Vec3(specular, specular, specular), 0, 255)]#, self.normal, mid_point_projected1, mid_point_projected2]  # clamp(self.color * Vec3(light, light, light), 0, 255)
+        return [clipped, (z1 + z2 + z3) * 0.33333333333, clamp(mix(self.color, undertone, undertone_strength) * Vec3(light, light, light) + Vec3(specular, specular, specular), 0, 255)]#, self.normal, mid_point_projected1, mid_point_projected2]  # clamp(self.color * Vec3(light, light, light), 0, 255)
 
 
 # stores a point and rotates it
@@ -435,13 +447,14 @@ def Rotate(point: Vec3, XZ: RotMat, YZ: RotMat) -> Vec3:
 
 # ui (just text for now)
 class UI:
+    # rendering text with many options (transparecy, size, centering, color, font, ect...)
     def text(text: str, color, pos, size: float, center: bool = False, font: str = 'pixel.ttf', trans: int = 255):
         largeText = pygame.font.Font(font, size)
         textSurface = largeText.render(text, True, color)
         TextSurf, TextRect = textSurface, textSurface.get_rect()
-        if trans != 255:
+        if trans != 255:  # checking if the text is transparent
             surf = pygame.Surface(TextRect.size)
-            if color == (0, 0, 0):
+            if color == (0, 0, 0):  # making sure black text still works with transparecy
                 surf.fill((255, 255, 255))
                 surf.set_colorkey((255, 255, 255))
             else:
@@ -449,19 +462,19 @@ class UI:
                 surf.set_colorkey((0, 0, 0))
             surf.set_alpha(trans)
             n_pos = pos
-            if center:
+            if center:  # checking if the text should be centered
                 pos = (TextRect.size[0] // 2, TextRect.size[1] // 2)
             else:
                 pos = (0, 0)
         else:
             surf = screen
-        if center:
+        if center:  # checking if the text should be centered
             TextRect.center = pos
             sprite = surf.blit(TextSurf, TextRect)
         else:
             sprite = surf.blit(TextSurf, pos)
         
-        if trans != 255:
+        if trans != 255:  # a bit more with transparecy
             if center:
                 screen.blit(surf, (n_pos[0] - TextRect.size[0] // 2, n_pos[1] - TextRect.size[1] // 2))
             else:
@@ -614,7 +627,7 @@ tri_num += 4
 # reading an object file and converting its data to my data
 #"""
 polygons = []
-data = open('test_map.obj').read().split('\n')
+data = open('test_map.obj').read().split('\n')  # opening the file with the data on the map
 
 #normals = []
 verts = []
@@ -634,15 +647,18 @@ for line in data:
 for line in data:
     if len(line) > 2:
         if line[0] == 'f':
+            # the indexes for the verticies
             points = line.split(' ')
             point1 = int(points[1].split('/')[0]) - 1
             point2 = int(points[2].split('/')[0]) - 1
             point3 = int(points[3].split('/')[0]) - 1
 
+            # the points corresponding to the indexes
             vert1 = verts[point1].point
             vert2 = verts[point2].point
             vert3 = verts[point3].point
             
+            # finding the normal of the polygon (to fix an issue i was having)
             line1 = Vec3(None, None, None)
             line2 = Vec3(None, None, None)
             normal = Vec3(None, None, None)
@@ -654,6 +670,7 @@ for line in data:
             normal.y = line1.z * line2.x - line1.x * line2.z
             normal.z = line1.x * line2.y - line1.y * line2.x
 
+            # creating and adding the polygon
             polygons.append(Polygon(point1, point2, point3, normalize(Vec3(normal.x, normal.y, normal.z)), Vec3(205,133,63)))
             #tri_number += 1
 #"""
@@ -697,11 +714,11 @@ while running:
 
     s = time.time()  # the start time
     for event in pygame.event.get():  # looping through the events of this frame
-        if event.type == pygame.QUIT:  # checking if the windo has been closed
+        if event.type == pygame.QUIT:  # checking if the window has been closed (and if so i end the game)
             running = False
             pygame.quit()
             break
-        elif event.type == pygame.KEYDOWN:  # checking for keys being pressed
+        elif event.type == pygame.KEYDOWN:  # checking for keys being pressed (and setting the held value for those keys to True)
             if event.key == ord('w'):
                 held["w"] = True
             elif event.key == ord('a'):
@@ -725,7 +742,7 @@ while running:
             elif event.key in [ord('1'), ord('2')]:
                 number = [0, 1, 2, 3, 4, 5, 6, 7, 8][[ord('1'), ord('2')].index(event.key)]
                 undertone = undertones[number]
-        elif event.type == pygame.KEYUP:  # checking for keys being released
+        elif event.type == pygame.KEYUP:  # checking for keys being released (and setting the held values of those keys to be False)
             if event.key == ord('w'):
                 held["w"] = False
             elif event.key == ord('a'):
@@ -752,13 +769,13 @@ while running:
     
     # some different speed things for movement and rotation of the camera
     movement_speed = 50 # * dt
-    if grounded <= 0:
+    if grounded <= 0:  # checking if grounded or not (to correct for the friction stuff)
         movement_speed = 20
     pi = 3.14159
-    rot_speed = pi * dt * 1.25
+    rot_speed = pi * dt * 1.25  # the speed at which the camera is rotated
 
     F_app = Vec3(0, 0, 0)
-    # moving the camera/player
+    # moving the player (directrion) and the player (position)  (the camera sits 2 units above the player so the camera isn't on the ground)
     if held["w"]:
         F_app += Vec3(movement_speed * -math.sin(cam_rot.x), 0, movement_speed * math.cos(cam_rot.x))
     if held["a"]:
@@ -767,7 +784,7 @@ while running:
         F_app += Vec3(movement_speed * math.sin(cam_rot.x), 0, movement_speed * -math.cos(cam_rot.x))
     if held["d"]:
         F_app += Vec3(movement_speed * -math.sin(cam_rot.x - pi * 0.5), 0, movement_speed * math.cos(cam_rot.x - pi * 0.5))
-    #if held["shift"]:
+    #if held["shift"]:  # moving down isn't being used but was before the physcis engine was created
     #    F_app += Vec3(0, movement_speed, 0)
     if held[" "] and grounded >= 0 and last_jumped <= 0:
         F_app += Vec3(0, -225, 0)
@@ -786,24 +803,13 @@ while running:
         change_cam = Vec2(0, -rot_speed)
         cam_rot += change_cam
 
-    # finding the net force
- 
-    def IsOnSurface(triangle: Polygon, point: Vec3) -> bool:
-        normal = triangle.normal  # the normal
-        mid_point = (verts[triangle.point1].point + verts[triangle.point2].point + verts[triangle.point3].point) * FV3(0.33333333)  # the mid point of the triangle
-        direction_to_mid_point = normalize(mid_point - point)  # the direction to the center of the triangle (is 90˚ to the surface normal if it is parallel to the polygon)
-        perpandicular = abs(dot(normal, direction_to_mid_point)) < 0.00002  # if the direction is 90˚ to the normal then it is parallel to the triangle
-        if perpandicular:
-            # check if the point is in the bounds of the triangles edges
-            return True
-        return False
-
     Fnet = Vec3(0, 0, 0)
     #F_g = Vec3(0, 9.81, 0)  # gravity
     F_f = Vec3(0, 0, 0)
-    if grounded <= 0:
-        F_f = -Vec3(velocity.x, 0, velocity.z) * FV3(1)
+    if grounded <= 0:  # checking for friction (in the air so the player dosen't go flying away)
+        F_f = -Vec3(velocity.x, 0, velocity.z) * FV3(2.5)
 
+    # finding the force of gravity and the net force and acceleration
     F_g = Vec3(0, 9.81, 0)  # gravity
     Fnet = Fnet + F_g + F_app + F_f
     a = Fnet
@@ -811,6 +817,7 @@ while running:
     #if grounded < 0:
     #    a += -velocity * FV3(1)
 
+    # the time sense the player was last on the ground (in platformers it feels better if you can still jump shortky after having left the platform)
     grounded -= dt
     last_jumped -= dt
 
@@ -829,21 +836,28 @@ while running:
                 #dst_to_surface = length(intersection) - 0.000001  # the intersection function dosent work on the surface of an object so im moving it back a bit
                 #collition_point = movement_direction * Vec3(dst_to_surface, dst_to_surface, dst_to_surface)
                 surface_normal = polygon.normal  # * Vec3(1, -1, 1)
-                last_normal = surface_normal
+                last_normal = surface_normal  # not being used
 
+                # correcting the velocity based on the surface normal
                 v_dot_n = dot(surface_normal, velocity)
                 velocity_n = velocity - surface_normal * FV3(v_dot_n)
 
+                # correcting the acceleration based on the surface normal
                 a_dot_n = dot(surface_normal, a)
                 na = a - surface_normal * FV3(a_dot_n)
                 
+                # the coefficients of friction
                 mewK = 0.4
                 mewS = 0.55
+                # the force in the normal direction
                 normal_force = a - na
+                # the opposite direction of sliding
                 dir = normalize(-Vec3(velocity.x - F_app.x * dt, 0, velocity.z - F_app.z * dt))
+                # the max amount of force before the player is at dynamic friction
                 f_max = mewS * length(normal_force)
                 lv = length(Vec2(velocity.x - F_app.x * dt, velocity.z - F_app.z * dt))
 
+                # finding if static or dynamic friction should be used and then calculating the force of it
                 F_sliding = lv / dt# + length(Vec2(na.x - F_app.x, na.z - F_app.z))
                 if F_sliding < f_max:
                     F_f = FV3(F_sliding) * dir
@@ -852,11 +866,13 @@ while running:
                 
                 velocity = velocity_n
 
+                # changing the acceleration based on the force of friction
                 a = a + F_f
 
                 a_dot_n = dot(surface_normal, a)
                 a = a - surface_normal * FV3(a_dot_n)
 
+                # checking if the ground is flat enough to jump (aka not a wall)
                 if dot(Vec3(0, 1, 0), surface_normal) >= 0.3:
                     grounded = 0.4
                 
@@ -864,18 +880,22 @@ while running:
                 #    length_of_vector_in_this_direction = 10
                 #    a += surface_normal * Vec3(1, -1, 1) * FV3(polygon.tags[Tags.bouncy] * length_of_vector_in_this_direction)
                 
+                # re-creating the end of the ray sense the velocity and acceleration has changed
                 ray_endXZ  = player_pos + FV3(0.5) * Vec3(a.x, 0, a.z) * FV3(pow(dt, 2)) + FV3(dt) * Vec3(velocity.x, 0, velocity.z)  # the end of the ray
                 ray_endXYZ = player_pos + FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * velocity  # the end of the ray
     
+    # the the player dosen't go flying off into the distance (idk if its still needed)
     velocity = Vec3(pyMath.clamp(velocity.x, -5, 5), velocity.y, pyMath.clamp(velocity.z, -5, 5))    
     # changing the position and velocity
     
+    # moving the player ∆x = vi*t + 0.5 * a * t^2
     player_pos += FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * velocity
+    # changing the velocity
     velocity += a * Vec3(dt, dt, dt)
     #player_pos += F_app * Vec3(dt, dt, dt)
     cam_pos = player_pos - Vec3(0, 2, 0)
 
-    if player_pos.y > 100:
+    if player_pos.y > 100:  # checking if the player has fallen off the map and moving back to the start
         player_pos = Vec3(0, -10, 0)
         player_velocity = Vec3(0, 0, 0)
 
@@ -893,9 +913,10 @@ while running:
 
     matView = Matrix_QuickInverse(matCamera)
 
+    # the forwards direction
     forwards_vector = Rotate(Vec3(0, 0, -1), rotMatX, rotMatY)
     radians = Vec2(math.atan2(sun_dir.x - forwards_vector.x, sun_dir.z - forwards_vector.z), math.atan2(sun_dir.y - forwards_vector.y, sun_dir.z - forwards_vector.z))
-    
+
     # filling the screen with a color (creating a sky box)
     v = fov / 360 * 3.14159 / 750
     for y in range(0, 750, 1):
