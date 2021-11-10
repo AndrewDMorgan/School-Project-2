@@ -1,8 +1,8 @@
 # My Second Project For School
-My second project for school. It consists of a 3D renderer and soon to be basic physics.
+My second project for school. It consists of a 3D renderer and a custome physics engine (with many bugs).
 
 # Basic Information
-I will soon be uploading a more complete and cleaned up version of the renderer which has some optomizaitons. I will also be working on a physics engine so the player can collide with the static meshes.
+I will be continuing work on this. Next I ill fix some bugs and continue to add more features to my game
 
 # Planned Features
 
@@ -16,5 +16,6 @@ I will soon be uploading a more complete and cleaned up version of the renderer 
 - At least 15 fps
 - Dealine idk
 - A fair bit more of polish
-- A better map
+- More levels
 - More meckanics
+- Fix a few physics and rendering bugs
