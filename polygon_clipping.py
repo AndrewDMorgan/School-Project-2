@@ -244,9 +244,30 @@ def clip(subjectPolygon, clipPolygon):
         dp = [ s[0] - e[0], s[1] - e[1] ]
         n1 = cp1[0] * cp2[1] - cp1[1] * cp2[0]
         n2 = s[0] * e[1] - s[1] * e[0] 
-        n3 = 1.0 / (dc[0] * dp[1] - dc[1] * dp[0])
+        n3 = pyMath.divide0(1.0, (dc[0] * dp[1] - dc[1] * dp[0]))
         return [(n1*dp[0] - n2*dc[0]) * n3, (n1*dp[1] - n2*dc[1]) * n3]
     
+    """
+    def SortPoints(triangle: List[List[float]]) -> List[List[float]]:
+        def SortKeyX(p: List[float]) -> float:
+            return p[0]
+        def SortKey(p: List[float]) -> float:
+            return -p[1]
+        
+        tri1 = triangle[0]
+        tri2 = triangle[1]
+        tri3 = triangle[2]
+
+        tris = [tri1, tri2, tri3]
+        tris.sort(key=SortKey)
+        lowest = tris[0]
+        n_tris = [tris[1], tris[2]]
+        n_tris.sort(key=SortKeyX)
+        return [lowest, n_tris[0], n_tris[1]]
+
+    clipPolygon = SortPoints(clipPolygon)
+    #"""
+
     outputList = subjectPolygon
     cp1 = clipPolygon[-1]
     
@@ -513,8 +534,7 @@ frame = 0
 
 # the tone of all the colors and the color of the sky
 undertones = [Vec3(138,10,10), Vec3(250,235,215), Vec3(245,245,220), Vec3(255,240,245), Vec3(240,255,240), Vec3(0,47,167), Vec3(255,255,0), Vec3(128,0,0), Vec3(160,82,45)]
-undertones = [Vec3(250,235,215), Vec3(128,0,0)]
-undertone = undertones[1]
+undertone = Vec3(128,0,0)
 undertone_strength = 0.1
 sky_color = Vec3(135,206,250)
 
@@ -626,13 +646,17 @@ tri_num += 4
 
 # reading an object file and converting its data to my data
 #"""
-polygons = []
-data = open('test_map.obj').read().split('\n')  # opening the file with the data on the map
+polygons = {}
+current_object = ''
+data = open('level1_map.obj').read().split('\n')  # opening the file with the data on the map
 
 #normals = []
 verts = []
 
-tri_number = 0
+object_num = 0
+colors = []
+for i in range(30):
+    colors.append(Vec3(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
 # object files are farly easy to convert luckily and this took 15 mins
 for line in data:
@@ -644,9 +668,11 @@ for line in data:
             #elif line[1] == 'n':
             #    points = line.split(' ')
             #    normals.append(Vec3(float(points[1]), float(points[2]), float(points[3])))
-for line in data:
-    if len(line) > 2:
-        if line[0] == 'f':
+        elif line[0] == 'o':
+            current_object = line
+            polygons[current_object] = []
+            object_num += 1
+        elif line[0] == 'f':
             # the indexes for the verticies
             points = line.split(' ')
             point1 = int(points[1].split('/')[0]) - 1
@@ -671,12 +697,14 @@ for line in data:
             normal.z = line1.x * line2.y - line1.y * line2.x
 
             # creating and adding the polygon
-            polygons.append(Polygon(point1, point2, point3, normalize(Vec3(normal.x, normal.y, normal.z)), Vec3(205,133,63)))
-            #tri_number += 1
+            polygons[current_object].append(Polygon(point1, point2, point3, normalize(Vec3(normal.x, normal.y, normal.z)), colors[object_num]))
 #"""
 
 # i can render multiple meshes by adding a , then another list of Polygons
-polygons = [polygons]
+polygons_n = []
+for key in polygons:
+    polygons_n.append(polygons[key])
+polygons = polygons_n
 
 # the bounds of the screen for clipping 2d polygons to
 clipping_bounds = [[0, 0], [0, res.y], [res.x, res.y], [res.x, 0]]
@@ -684,6 +712,17 @@ clipping_bounds = [[0, 0], [0, res.y], [res.x, res.y], [res.x, 0]]
 # the rendered polygons (for depth sorting followed by rendering)
 #projected_verts = []
 rendered_polygons = []
+
+sky_box = []
+for y in range(1200):
+    height = y / 1200 * 0.7 + 0.3
+    n_color = mix(sky_color * Vec3(height, height, height), undertone, undertone_strength)
+    sky_box.append(n_color)
+
+sin_table = {}
+for v in range(-600, 600):
+    v_ = v / 100
+    sin_table[v] = math.sin(v_)
 
 # the keys being held/not held
 held = {
@@ -700,6 +739,12 @@ held = {
 }
 
 last_normal = Vec3(0, 0, 0)
+
+spawn_position = Vec3(0, -10, 0)
+
+won = 0
+key_grabbed = 0
+keys = [False, False]
 
 # the delta time (for physics and movement and rotation of camera smoothly)
 dt = 0
@@ -739,9 +784,6 @@ while running:
                 held["up"] = True
             elif event.key == pygame.K_DOWN:
                 held["down"] = True
-            elif event.key in [ord('1'), ord('2')]:
-                number = [0, 1, 2, 3, 4, 5, 6, 7, 8][[ord('1'), ord('2')].index(event.key)]
-                undertone = undertones[number]
         elif event.type == pygame.KEYUP:  # checking for keys being released (and setting the held values of those keys to be False)
             if event.key == ord('w'):
                 held["w"] = False
@@ -768,9 +810,7 @@ while running:
         break
     
     # some different speed things for movement and rotation of the camera
-    movement_speed = 50 # * dt
-    if grounded <= 0:  # checking if grounded or not (to correct for the friction stuff)
-        movement_speed = 20
+    movement_speed = 50
     pi = 3.14159
     rot_speed = pi * dt * 1.25  # the speed at which the camera is rotated
 
@@ -786,32 +826,37 @@ while running:
         F_app += Vec3(movement_speed * -math.sin(cam_rot.x - pi * 0.5), 0, movement_speed * math.cos(cam_rot.x - pi * 0.5))
     #if held["shift"]:  # moving down isn't being used but was before the physcis engine was created
     #    F_app += Vec3(0, movement_speed, 0)
-    if held[" "] and grounded >= 0 and last_jumped <= 0:
-        F_app += Vec3(0, -225, 0)
-        last_jumped = 1
+    if held[" "] and grounded >= 0 and last_jumped <= 0:  # the extra height from jumping is not happening here (the player only jumps once)
+        F_app += Vec3(0, -350, 0)
+        last_jumped = 1.5
         grounded = -20
-    if held["left"]:
-        change_cam = Vec2(rot_speed, 0)
-        cam_rot += change_cam
-    if held["right"]:
-        change_cam = Vec2(-rot_speed, 0)
-        cam_rot += change_cam
-    if held["up"]:
-        change_cam = Vec2(0, rot_speed)
-        cam_rot += change_cam
-    if held["down"]:
-        change_cam = Vec2(0, -rot_speed)
-        cam_rot += change_cam
+    if won == 0:
+        if held["left"]:
+            change_cam = Vec2(rot_speed, 0)
+            cam_rot += change_cam
+        if held["right"]:
+            change_cam = Vec2(-rot_speed, 0)
+            cam_rot += change_cam
+        if held["up"]:
+            change_cam = Vec2(0, rot_speed)
+            cam_rot += change_cam
+        if held["down"]:
+            change_cam = Vec2(0, -rot_speed)
+            cam_rot += change_cam
+    nomred_fapp = normalize(Vec2(F_app.x, F_app.z)) * Vec2(movement_speed, movement_speed)
+    F_app = Vec3(nomred_fapp.x, F_app.y, nomred_fapp.y)
+    
+    # making it so the camera rotation values dont get really big sense im using a limited size sin and cosine table to save as much fps as possible
+    if cam_rot.y > 3.14159:
+        cam_rot.y -= 3.14159 * 2
+    if cam_rot.y < -3.14159:
+        cam_rot.y += 3.14159 * 2
 
-    Fnet = Vec3(0, 0, 0)
-    #F_g = Vec3(0, 9.81, 0)  # gravity
-    F_f = Vec3(0, 0, 0)
-    if grounded <= 0:  # checking for friction (in the air so the player dosen't go flying away)
-        F_f = -Vec3(velocity.x, 0, velocity.z) * FV3(2.5)
+    F_f = Vec3(velocity.x, 0, velocity.z) * FV3(-6.5)
 
-    # finding the force of gravity and the net force and acceleration
+    # finding the force of gravity and the net force and acceleration (acceleration is equal to the net force sense the player is 1kg because im lazy)
     F_g = Vec3(0, 9.81, 0)  # gravity
-    Fnet = Fnet + F_g + F_app + F_f
+    Fnet = F_g + F_f + F_app
     a = Fnet
 
     #if grounded < 0:
@@ -821,11 +866,12 @@ while running:
     grounded -= dt
     last_jumped -= dt
 
+    # finding the starting and ending position of the player (if there were to be no collition)
     ray_start = player_pos
-    ray_endXZ  = player_pos + FV3(0.5) * Vec3(a.x, 0, a.z) * FV3(pow(dt, 2)) + FV3(dt) * Vec3(velocity.x, 0, velocity.z)  # the end of the ray
-    ray_endXYZ = player_pos + FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * velocity  # the end of the ray
-
-    #movement_direction = normalize(ray_end)
+    ray_endXZ  = player_pos + (Vec3(velocity.x, 0, velocity.z) * FV3(dt) + FV3(0.5) * Vec3(a.x, 0, a.z) * FV3(dt * dt))  # the end of the ray
+    ray_endXYZ = player_pos + (velocity                        * FV3(dt) + FV3(0.5) * a                 * FV3(dt * dt))  # the end of the ray
+    
+    # lopping through the mesh and applying physics to the player for every polygon hit
     for mesh in polygons:
         for polygon in mesh:
             intersectionXZ = RayTriangle(verts[polygon.point1].point, verts[polygon.point2].point, verts[polygon.point3].point, ray_start, ray_endXZ)
@@ -833,10 +879,21 @@ while running:
             #on_surface = IsOnSurface(polygon, ray_start)
             # check if the point is right on the surface (the intersection function only works when the point isnt on the surface)
             if intersectionXZ is not False or intersectionXYZ is not False:# or on_surface:
+                color = polygon.color
+                object_index = colors.index(color)
+                if object_index in [19, 20] and polygon.normal == Vec3(0, 1, 0):
+                    if not keys[object_index - 19]:
+                        key_grabbed = time.time()
+                        keys[object_index - 19] = True
+                        spawn_position = (polygon.point1o + polygon.point2o + polygon.point3o) * FV3(0.33333333333) - Vec3(0, 2, 0)
+                elif object_index == 1 and keys[0] and keys[1] and won == 0:
+                    won = time.time()
+                elif object_index == 1 and spawn_position != Vec3(0, -10, 0):
+                    spawn_position = Vec3(0, -10, 0)
                 #dst_to_surface = length(intersection) - 0.000001  # the intersection function dosent work on the surface of an object so im moving it back a bit
                 #collition_point = movement_direction * Vec3(dst_to_surface, dst_to_surface, dst_to_surface)
                 surface_normal = polygon.normal  # * Vec3(1, -1, 1)
-                last_normal = surface_normal  # not being used
+                #last_normal = surface_normal  # not being used
 
                 # correcting the velocity based on the surface normal
                 v_dot_n = dot(surface_normal, velocity)
@@ -846,29 +903,37 @@ while running:
                 a_dot_n = dot(surface_normal, a)
                 na = a - surface_normal * FV3(a_dot_n)
                 
-                # the coefficients of friction
-                mewK = 0.4
-                mewS = 0.55
-                # the force in the normal direction
-                normal_force = a - na
+                """
+                # the coefficients of static and dynamic friction
+                mewK = 0.65
+                mewS = 0.8
+                
+                # fidning the normal force (i know it works on flat planes but i dont know about sloped ones)
+                dif_vecs = surface_normal - Fnet  # finding the difference between vectors (so i can find the angle between them)
+                thetaXY = math.atan(pyMath.divide0(dif_vecs.y, dif_vecs.x))  # finding theta (using two 2D right triangles to make a 3D one)
+                thetaZY = math.atan(pyMath.divide0(dif_vecs.y, dif_vecs.z))  # finding theta (using two 2D right triangles to make a 3D one)
+                lengthXY = length(Vec2(Fnet.x, Fnet.y)) * math.cos(thetaXY)  # finding the length of the vector in the direction of the other vector
+                lengthZY = length(Vec2(Fnet.z, Fnet.z)) * math.cos(thetaZY)  # finding the length of the vector in the direction of the other vector
+                normal_force = length(Vec2(lengthXY, lengthZY))  # the normal force, is a scaler (no direction)
+                
                 # the opposite direction of sliding
-                dir = normalize(-Vec3(velocity.x - F_app.x * dt, 0, velocity.z - F_app.z * dt))
+                dir = normalize(Vec3(-velocity.x, 0, -velocity.z))  # not correct this needs to be parrallel to the surface not flat ground (only properly works on flat ground currently)
                 # the max amount of force before the player is at dynamic friction
-                f_max = mewS * length(normal_force)
-                lv = length(Vec2(velocity.x - F_app.x * dt, velocity.z - F_app.z * dt))
+                f_max = mewS * normal_force
+                F_sliding = length(Vec2(a.x, a.z)) + length(Vec2(velocity.x / dt, velocity.z / dt))  # the force of sliding
 
                 # finding if static or dynamic friction should be used and then calculating the force of it
-                F_sliding = lv / dt# + length(Vec2(na.x - F_app.x, na.z - F_app.z))
-                if F_sliding < f_max:
+                if F_sliding < f_max:  # static friction
                     F_f = FV3(F_sliding) * dir
-                else:
-                    F_f = FV3(F_sliding - (mewK * length(normal_force))) * dir
+                    a = a + F_f  # changing the acceleration based on the force of friction
+                else:  # kenetic friction
+                    F_f = FV3(mewK * normal_force) * dir
+                    a = a + F_f  # changing the acceleration based on the force of friction
+                #"""
                 
-                velocity = velocity_n
+                velocity = velocity_n  # changing the velocity to the corrected velocity
 
-                # changing the acceleration based on the force of friction
-                a = a + F_f
-
+                # correcting the acceleration again so the player dosent go through the floor from friction
                 a_dot_n = dot(surface_normal, a)
                 a = a - surface_normal * FV3(a_dot_n)
 
@@ -880,23 +945,28 @@ while running:
                 #    length_of_vector_in_this_direction = 10
                 #    a += surface_normal * Vec3(1, -1, 1) * FV3(polygon.tags[Tags.bouncy] * length_of_vector_in_this_direction)
                 
-                # re-creating the end of the ray sense the velocity and acceleration has changed
-                ray_endXZ  = player_pos + FV3(0.5) * Vec3(a.x, 0, a.z) * FV3(pow(dt, 2)) + FV3(dt) * Vec3(velocity.x, 0, velocity.z)  # the end of the ray
-                ray_endXYZ = player_pos + FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * velocity  # the end of the ray
+                # re-creating the end of the ray sense the velocity and acceleration has changed, correcting the ray start and end for the collition
+                ray_endXZ  = player_pos + (Vec3(velocity.x, 0, velocity.z) * FV3(dt) + FV3(0.5) * Vec3(a.x, 0, a.z) * FV3(dt * dt))  # the end of the ray
+                ray_endXYZ = player_pos + (velocity                        * FV3(dt) + FV3(0.5) * a                 * FV3(dt * dt))  # the end of the ray
     
-    # the the player dosen't go flying off into the distance (idk if its still needed)
-    velocity = Vec3(pyMath.clamp(velocity.x, -5, 5), velocity.y, pyMath.clamp(velocity.z, -5, 5))    
+    # the the player dosen't go flying off into the distance (still neeeded for when in the air)
+    #velocity = Vec3(pyMath.clamp(velocity.x, -5, 5), velocity.y, pyMath.clamp(velocity.z, -5, 5))    
     # changing the position and velocity
     
+    if won != 0:
+        velocity = Vec3(0, 0, 0)
+        a = Vec3(0, 0, 0)
+
     # moving the player ∆x = vi*t + 0.5 * a * t^2
-    player_pos += FV3(0.5) * a * FV3(pow(dt, 2)) + FV3(dt) * velocity
+    player_pos += velocity * FV3(dt) + FV3(0.5) * a * FV3(dt * dt)
     # changing the velocity
     velocity += a * Vec3(dt, dt, dt)
     #player_pos += F_app * Vec3(dt, dt, dt)
     cam_pos = player_pos - Vec3(0, 2, 0)
 
-    if player_pos.y > 100:  # checking if the player has fallen off the map and moving back to the start
-        player_pos = Vec3(0, -10, 0)
+    if player_pos.y > 50:  # checking if the player has fallen off the map and moving back to the start
+        #player_pos = Vec3(0, -10, 0)
+        player_pos = spawn_position
         player_velocity = Vec3(0, 0, 0)
 
     # creating the rotation matricies
@@ -919,11 +989,10 @@ while running:
 
     # filling the screen with a color (creating a sky box)
     v = fov / 360 * 3.14159 / 750
-    for y in range(0, 750, 1):
-        height = math.sin(cam_rot.y + (750 - y) * v - 1) * 0.3 + 0.7
-        n_color = mix(sky_color * Vec3(height, height, height), undertone, undertone_strength)
-        pygame.draw.rect(screen, n_color, [0, y, 1200, 1])
-    #screen.fill(mix(sky_color, undertone, undertone_strength))
+    for y in range(0, 750, 5):
+        height = round((sin_table[math.floor((cam_rot.y + (750 - y) * v - 1) * 100)] * 599.5 + 599.5))
+        n_color = sky_box[height]
+        pygame.draw.rect(screen, n_color, [0, y, 1200, 5])
 
     # setting up some variables
     renderings = []
@@ -964,9 +1033,31 @@ while running:
             #mid_point2 = polygon[5]
             #pygame.draw.line(screen, (0, 0, 0), [mid_point1[0][0], mid_point1[0][1]], [mid_point2[0][0], mid_point2[0][1]])
     
+    pygame.draw.line(screen, (0, 0, 0), [595, 375], [605, 375])
+    pygame.draw.line(screen, (0, 0, 0), [600, 370], [600, 380])
+
     # rendering the fps
     UI.text(f'FPS: {round(1 / max(dt, 0.00000001))}', (0, 0, 40), (10, 30), 35)
     UI.text(f'Pos: {round(player_pos.x, 1)}, {round(player_pos.y, 1)}, {round(player_pos.z, 1)}', (0, 0, 40), (10, 10), 35)
+
+    num_keys = 0
+    if keys[0]:
+        num_keys += 1
+    if keys[1]:
+        num_keys += 1
+    
+    UI.text(f'Keys {num_keys} / {len(keys)}', (0, 0, 40), (10, 50), 35)
+    
+    if time.time() - key_grabbed < 4:
+        time_dif = pow((time.time() - key_grabbed) / 4, 3)
+        if keys[0] and keys[1]:
+            UI.text('Return To The Start', (0, 0, 40), (600, 375), 80, True, trans=255-time_dif*255)
+        else:
+            UI.text('Key Collected', (0, 0, 40), (600, 375), 80, True, trans=255-time_dif*255)
+
+    if time.time() - won < 4:
+        time_dif = pow((time.time() - won) / 4, 3)
+        UI.text('You Won!', (0, 0, 40), (600, 375), 80, True, trans=255-time_dif*255)
 
     # updating the display
     pygame.display.update()
@@ -974,6 +1065,13 @@ while running:
     # increasing the frame count by dt to make it smooth
     frame += dt
 
+    """
+    # clamping the fps to 30 to fix a bug (helps slightly but the bug needs fixing)
+    min_time = 1 / 30  # the minimum amount of time a frame should take up
+    e = time.time()  # the end time
+    if e - s < min_time:  # finding the the frame took less time than the minimum time
+        dif = min_time - (e - s)  # finding how much less time it took than the minimum
+        time.sleep(dif)  # waiting the difference between the times
+    #"""
     e = time.time()  # the end time
     dt = e - s  # find dt (delta time or end_time - start_time or the change in time)
-
